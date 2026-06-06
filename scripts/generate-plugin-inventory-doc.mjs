@@ -25,11 +25,13 @@ const PLUGIN_DOC_ALIASES = new Map([
   ["duckduckgo", "/tools/duckduckgo-search"],
   ["exa", "/tools/exa-search"],
   ["firecrawl", "/tools/firecrawl"],
+  ["parallel", "/tools/parallel-search"],
   ["perplexity", "/tools/perplexity-search"],
   ["policy", "/cli/policy"],
   ["tavily", "/tools/tavily"],
   ["tokenjuice", "/tools/tokenjuice"],
 ]);
+const PLUGIN_DOC_LABEL_ALIASES = new Map([["parallel", "Parallel search"]]);
 const MANUAL_SECTION_START = "<!-- openclaw-plugin-reference:manual-start -->";
 const MANUAL_SECTION_END = "<!-- openclaw-plugin-reference:manual-end -->";
 
@@ -215,7 +217,12 @@ function resolveDocs({ dirName, manifest, packageJson }) {
   const links = [];
   const pluginAlias = PLUGIN_DOC_ALIASES.get(manifest.id) ?? PLUGIN_DOC_ALIASES.get(dirName);
   if (pluginAlias) {
-    pushUniqueDocLink(links, { href: pluginAlias, label: manifest.id ?? dirName });
+    const pluginAliasLabel =
+      PLUGIN_DOC_LABEL_ALIASES.get(manifest.id) ??
+      PLUGIN_DOC_LABEL_ALIASES.get(dirName) ??
+      manifest.id ??
+      dirName;
+    pushUniqueDocLink(links, { href: pluginAlias, label: pluginAliasLabel });
   }
 
   const channelDoc = normalizeDocPath(packageJson.openclaw?.channel?.docsPath);
@@ -336,37 +343,21 @@ function resolveStatus({ dirName, packageJson, excludedDirs }) {
   return "source";
 }
 
-function escapeCell(value) {
-  return String(value).replaceAll("\n", " ").replaceAll("|", "\\|");
+function escapeInventoryText(value) {
+  return String(value).replaceAll("\n", " ").trim();
 }
 
-function renderTable(records) {
-  const rows = [
-    ["Plugin", "Description", "Distribution", "Surface"],
-    ...records.map((record) => [
-      docLink({ href: pluginReferencePath(record.id), label: escapeCell(record.id) }),
-      escapeCell(record.description),
-      `\`${escapeCell(record.packageName)}\`<br />${escapeCell(record.installRoute)}`,
-      escapeCell(record.surface),
-    ]),
-  ];
-  const widths = rows[0].map((_, index) => Math.max(...rows.map((row) => row[index].length), 3));
-  const lines = [];
-  lines.push(formatTableRow(rows[0], widths));
-  lines.push(
-    formatTableRow(
-      widths.map((width) => "-".repeat(width)),
-      widths,
-    ),
-  );
-  for (const row of rows.slice(1)) {
-    lines.push(formatTableRow(row, widths));
+function renderInventoryList(records) {
+  if (records.length === 0) {
+    return "_None._";
   }
-  return lines.join("\n");
-}
 
-function formatTableRow(row, widths) {
-  return `| ${row.map((cell, index) => cell.padEnd(widths[index])).join(" | ")} |`;
+  return records
+    .map(
+      (record) =>
+        `- **${docLink({ href: pluginReferencePath(record.id), label: escapeInventoryText(record.id) })}** (\`${escapeInventoryText(record.packageName)}\`) - ${escapeInventoryText(record.installRoute)}. ${escapeInventoryText(record.description)} Surface: ${escapeInventoryText(record.surface)}`,
+    )
+    .join("\n");
 }
 
 function renderRelatedDocs(record) {
@@ -460,7 +451,9 @@ This page is generated from \`extensions/*/package.json\` and
 pnpm plugins:inventory:gen
 \`\`\`
 
-${renderTable(records)}
+Use [Plugin inventory](/plugins/plugin-inventory) to browse all ${records.length}
+generated plugin reference pages by distribution, package, description, and
+surface.
 `;
 }
 
@@ -592,9 +585,9 @@ dependencies are available.
 
 ## Install a plugin
 
-Use the **Distribution** column to decide whether install is needed. Plugins that
-say \`included in OpenClaw\` are already present in the core package. Official
-external packages need one install, then a Gateway restart.
+Use the install route in each entry to decide whether install is needed. Plugins
+that say \`included in OpenClaw\` are already present in the core package.
+Official external packages need one install, then a Gateway restart.
 
 For example, Discord is an official external package:
 
@@ -611,17 +604,26 @@ explicit source. After install, follow the plugin's setup doc, such as
 [Manage plugins](/plugins/manage-plugins) for update, uninstall, and publishing
 commands.
 
+Each entry lists the package, distribution route, description, and exposed
+surface.
+
 ## Core npm package
 
-${renderTable(groups.core)}
+${groups.core.length} plugins
+
+${renderInventoryList(groups.core)}
 
 ## Official external packages
 
-${renderTable(groups.external)}
+${groups.external.length} plugins
+
+${renderInventoryList(groups.external)}
 
 ## Source checkout only
 
-${renderTable(groups.source)}
+${groups.source.length} plugins
+
+${renderInventoryList(groups.source)}
 `;
 }
 
